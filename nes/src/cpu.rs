@@ -37,6 +37,9 @@ impl CPU {
         }
     }
 
+    // below: cpu receives instructions as a seperate input stream
+    // not really how things work in an actual NES
+
     pub fn new() -> Self {
         CPU {
             register_a: 0,
