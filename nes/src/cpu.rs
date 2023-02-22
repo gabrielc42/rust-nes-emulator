@@ -1,12 +1,79 @@
+use crate::opcodes;
+use std::collections::HashMap;
+
+bitflags! {
+    /// # Status Register (P) http://wiki.nesdev.com/w/index.php/Status_flags
+    ///
+    ///  7 6 5 4 3 2 1 0
+    ///  N V _ B D I Z C
+    ///  | |   | | | | +--- Carry Flag
+    ///  | |   | | | +----- Zero Flag
+    ///  | |   | | +------- Interrupt Disable
+    ///  | |   | +--------- Decimal Mode (not used on NES)
+    ///  | |   +----------- Break Command
+    ///  | +--------------- Overflow Flag
+    ///  +----------------- Negative Flag
+    ///
+    pub struct CpuFlags: u8 {
+        const CARRY             = 0b00000001;
+        const ZERO              = 0b00000010;
+        const INTERRUPT_DISABLE = 0b00000100;
+        const DECIMAL_MODE      = 0b00001000;
+        const BREAK             = 0b00010000;
+        const BREAK2            = 0b00100000;
+        const OVERFLOW          = 0b01000000;
+        const NEGATIV           = 0b10000000;
+    }
+}
+
+const STACK: u16 = 0x0100;
+const STACK_RESET: u8 = 0xfd;
+
 pub struct CPU {
     pub register_a: u8,
     pub register_x: u8,
+    pub register_y: u8,
     pub status: u8,
     pub program_counter: u16,
+    pub stack_pointer: u8,
     memory: [u8; 0xFFFF],
 }
 
-impl CPU {
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub enum AddressingMode {
+    Immediate,
+    ZeroPage,
+    ZeroPage_X,
+    ZeroPage_Y,
+    Absolute,
+    Absolute_X,
+    Absolute_Y,
+    Indirect_X,
+    Indirect_Y,
+    NoneAddressing,
+}
+
+trait Mem {
+    fn mem_read(&self, addr: u16) -> u8;
+
+    fn mem_write(&mut self, addr: u16, data: u8);
+
+    fn mem_read_u16(&self, pos: u16) -> u16 {
+        let lo = self.mem_read(pos) as u16;
+        let hi = self.mem_read(pos + 1) as u16;
+        (hi << 8) | (lo as u16)
+    }
+
+    fn mem_write_u16(&mut self, pos: u16, data: u16) {
+        let hi = (data >> 8) as u8;
+        let lo = (data & 0xff) as u8;
+        self.mem_write(pos, lo);
+        self.mem_write(pos + 1, hi);
+    }
+}
+
+impl Mem for CPU {
     fn mem_read(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
@@ -14,93 +81,99 @@ impl CPU {
     fn mem_write(&mut self, addr: u16, data: u8) {
         self.memory[addr as usize] = data;
     }
+}
 
-    pub fn load_and_run(&mut self, program: Vec<u8>) {
-        self.load(program);
-        self.run()
-    }
+impl CPU {
+    pub fn new() -> Self {}
 
-    pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
-        self.program_counter = 0x8000;
-    }
+    fn get_operand_address(&self, mode: &AddressingMode) -> u16 {}
 
-    pub fn run(&mut self) {
-        // move initialization of program_counter from here to load fn
-        loop {
-            let opscode = self.mem_read(self.program_counter);
-            self.program_counter += 1;
+    fn ldy(&mut self, mode: &AddressingMode) {}
 
-            match opscode {
-                // ..
-            }
-        }
-    }
+    fn ldx(&mut self, mode: &AddressingMode) {}
 
-    // below: cpu receives instructions as a seperate input stream
-    // not really how things work in an actual NES
+    fn lda(&mut self, mode: &AddressingMode) {}
 
-    pub fn new() -> Self {
-        CPU {
-            register_a: 0,
-            register_x: 0,
-            status: 0,
-            program_counter: 0,
-        }
-    }
+    fn sta(&mut self, mode: &AddressingMode) {}
 
-    fn lda(&mut self, value: u8) {
-        self.register_a = value;
-        self.update_zero_and_negative_flags(self.register_a);
-    }
+    fn set_register_a(&mut self, value: u8) {}
 
-    fn tax(&mut self) {
-        self.register_x = self.register_a;
-        self.update_zero_and_negative_flags(self.register_x);
-    }
+    fn and(&mut self, mode: &AddressingMode) {}
 
-    fn update_zero_and_negative_flags(&mut self, result: u8) {
-        if result == 0 {
-            self.status = self.status | 0b0000_0010;
-        } else {
-            self.status = self.status & 0b1111_1101;
-        }
+    fn eor(&mut self, mode: AddressingMode) {}
 
-        if result & 0b1000_0000 != 0 {
-            self.status = self.status | 0b1000_0000;
-        } else {
-            self.status = self.status & 0b0111_1111;
-        }
-    }
+    fn ora(&mut self, mode: &AddressingMode) {}
 
-    fn inx(&mut self) {
-        self.register_x = self.register_x.wrapping_add(1);
-        self.update_zero_and_negative_flags(self.register_x);
-    }
+    fn tax(&mut self) {}
 
-    pub fn interpret(&mut self, program: Vec<u8>) {
-        self.program_counter = 0;
+    fn update_zero_and_negative_flags(&mut self, result: u8) {}
 
-        loop {
-            let opscode = program[self.program_counter as usize];
-            self.program_counter += 1;
+    fn inx(&mut self) {}
 
-            match opscode {
-                0xA9 => {
-                    let param = program[self.program_counter as usize];
-                    self.program_counter += 1;
-                    self.lda(param);
-                }
-                0xAA => self.tax(),
+    fn iny(&mut self) {}
 
-                0xe8 => self.inx(),
+    pub fn load_and_run(&mut self, program: Vec<u8>) {}
 
-                0x00 => return,
+    pub fn load(&mut self, program: Vec<u8>) {}
 
-                _ => todo!(),
-            }
-        }
-    }
+    pub fn reset(&mut self) {}
+
+    fn set_carry_flag(&mut self) {}
+
+    fn clear_carry_flag(&mut self) {}
+
+    // note: ignoring decimal mode
+    fn add_to_register_a(&mut self, data: u8) {}
+
+    fn sbc(&mut self, mode: &AddressingMode) {}
+
+    fn adc(&mut self, mode: &AddressingMode) {}
+
+    fn stack_pop(&mut self) -> u8 {}
+
+    fn stack_push(&mut self, data: u8) {}
+
+    fn stack_push_u16(&mut self, data: u16) {}
+
+    fn stack_pop_u16(&mut self) {}
+
+    fn asl_accumulator(&mut self) {}
+
+    fn asl(&mut self, mode: &AddressingMode) -> u8 {}
+
+    fn lsr_accumulator(&mut self) {}
+
+    fn lsr(&mut self, mode: &AddressingMode) -> u8 {}
+
+    fn rol(&mut self, mode: &AddressingMode) -> u8 {}
+
+    fn rol_accumulator(&mut self) {}
+
+    fn ror(&mut self, mode: &AddressingMode) -> u8 {}
+
+    fn ror_accumulator(&mut self) {}
+
+    fn inc(&mut self, mode: &AddressingMode) -> u8 {}
+
+    fn dey(&mut self) {}
+
+    fn dex(&mut self) {}
+
+    fn dec(&mut self, mode: &AddressingMode) -> u8 {}
+
+    fn pla(&mut self) {}
+
+    fn plp(&mut self) {}
+
+    fn php(&mut self) {}
+
+    fn bit(&mut self, mode: &AddressingMode) {}
+
+    fn compare(&mut self, mode: &AddressingMode, compare_with: u8) {}
+
+    fn branch(&mut self, condition: bool) {}
+
+    pub fn run(&mut self) {}
 }
 
 #[cfg(test)]
