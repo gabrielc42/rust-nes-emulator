@@ -154,35 +154,103 @@ impl CPU {
         }
     }
 
-    fn ldy(&mut self, mode: &AddressingMode) {}
+    fn ldy(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read(addr);
+        self.register_y = data;
+        self.update_zero_and_negative_flags(self.register_y);
+    }
 
-    fn ldx(&mut self, mode: &AddressingMode) {}
+    fn ldx(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read(addr);
+        self.register_x = data;
+        self.update_zero_and_negative_flags(self.register_x);
+    }
 
-    fn lda(&mut self, mode: &AddressingMode) {}
+    fn lda(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(&mode);
+        let value = self.mem_read(addr);
+        self.set_register_a(value);
+    }
 
-    fn sta(&mut self, mode: &AddressingMode) {}
+    fn sta(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        self.mem_write(addr, self.register_a);
+    }
 
-    fn set_register_a(&mut self, value: u8) {}
+    fn set_register_a(&mut self, value: u8) {
+        self.register_a = value;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
 
-    fn and(&mut self, mode: &AddressingMode) {}
+    fn and(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read(addr);
+        self.set_register_a(data & self.register_a);
+    }
 
-    fn eor(&mut self, mode: AddressingMode) {}
+    fn eor(&mut self, mode: AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read(addr);
+        self.set_register_a(data ^ self.register_a);
+    }
 
-    fn ora(&mut self, mode: &AddressingMode) {}
+    fn ora(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read(addr);
+        self.set_register_a(data | self.register_a);
+    }
 
-    fn tax(&mut self) {}
+    fn tax(&mut self) {
+        self.register_x = self.register_a;
+        self.update_zero_and_negative_flags(self.register_x);
+    }
 
-    fn update_zero_and_negative_flags(&mut self, result: u8) {}
+    fn update_zero_and_negative_flags(&mut self, result: u8) {
+        if result == 0 {
+            self.status.insert(CpuFlags::ZERO);
+        } else {
+            self.status.remove(CpuFlags::ZERO);
+        }
 
-    fn inx(&mut self) {}
+        if result & 0b1000_0000 != 0 {
+            self.status.insert(CpuFlags::NEGATIV);
+        } else {
+            self.status.remove(CpuFlags::NEGATIV);
+        }
+    }
 
-    fn iny(&mut self) {}
+    fn inx(&mut self) {
+        self.register_x = self.register_x.wrapping_add(1);
+        self.update_zero_and_negative_flags(self.register_x);
+    }
 
-    pub fn load_and_run(&mut self, program: Vec<u8>) {}
+    fn iny(&mut self) {
+        self.register_y = self.register_y.wrapping_add(1);
+        self.update_zero_and_negative_flags(self.register_y);
+    }
 
-    pub fn load(&mut self, program: Vec<u8>) {}
+    pub fn load_and_run(&mut self, program: Vec<u8>) {
+        self.load(program);
+        self.reset();
+        self.run()
+    }
 
-    pub fn reset(&mut self) {}
+    pub fn load(&mut self, program: Vec<u8>) {
+        self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
+        self.mem_write_u16(0xFFFC, 0x8000);
+    }
+
+    pub fn reset(&mut self) {
+        self.register_a = 0;
+        self.register_x = 0;
+        self.register_y = 0;
+        self.stack_pointer = STACK_RESET;
+        self.status = CpuFlags::from_bits_truncate(0b100100);
+
+        self.program_counter = self.mem_read_u16(0xFFFC);
+    }
 
     fn set_carry_flag(&mut self) {}
 
