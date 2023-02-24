@@ -848,6 +848,17 @@ mod test {
     }
 
     #[test]
+    fn test_0xaa_tax_move_a_to_x() {
+        let mut cpu = CPU::new();
+        cpu.load(vec![0xaa, 0x00]);
+        cpu.reset();
+        cpu.register_a = 10;
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 10)
+    }
+
+    #[test]
     fn test_0xa9_lda_zero_flag() {
         let mut cpu = CPU::new();
         cpu.interpret(vec![0xa9, 0x00, 0x00]);
